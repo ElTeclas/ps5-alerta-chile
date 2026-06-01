@@ -202,14 +202,41 @@ PRODUCTS = [
 
 def format_clp(price: int) -> str:
     return f"${price:,}".replace(",", ".")
-
-
 def parse_price(text: str, min_price: int, max_price: int):
     """
-    Busca precios chilenos tipo $549.990.
-    Filtra cuotas, garantías, despacho, puntos, CMR, seguros, etc.
+    Busca el precio del producto principal.
+    Primero intenta JSON-LD. Si no encuentra, corta el texto antes de recomendaciones.
     """
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    # 1) Precio desde JSON-LD/schema.org: más confiable en Falabella
+    json_ld_prices = re.findall(r'"price"\s*:\s*"?(\d{5,7})"?', text)
+    valid_json_prices = []
+
+    for match in json_ld_prices:
+        price = int(match)
+        if min_price <= price <= max_price:
+            valid_json_prices.append(price)
+
+    if valid_json_prices:
+        return min(valid_json_prices)
+
+    # 2) Cortar texto antes de recomendaciones / productos relacionados
+    stop_sections = [
+        "Comprados juntos frecuentemente",
+        "Varias personas después miran",
+        "Más opciones similares",
+        "También podría interesarte",
+        "Opiniones de este producto",
+        "Te ayudamos",
+    ]
+
+    main_text = text
+
+    for section in stop_sections:
+        if section in main_text:
+            main_text = main_text.split(section)[0]
+
+    lines = [line.strip() for line in main_text.splitlines() if line.strip()]
     prices = []
 
     bad_words = [
@@ -249,14 +276,12 @@ def parse_price(text: str, min_price: int, max_price: int):
                     continue
 
                 prices.append(price)
+
     if not prices:
         return None
 
     unique_prices = sorted(set(prices))
-
-    print("Precios candidatos:", [format_clp(p) for p in unique_prices])
     return unique_prices[0]
-
 def get_page_text_with_playwright(url: str):
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -275,13 +300,15 @@ def get_page_text_with_playwright(url: str):
             )
         )
 
-        # No usamos networkidle porque Falabella/Ripley/Paris a veces nunca terminan de cargar.
         page.goto(url, wait_until="domcontentloaded", timeout=90000)
         page.wait_for_timeout(8000)
 
-        text = page.inner_text("body", timeout=30000)
+        body_text = page.inner_text("body", timeout=30000)
+        html_text = page.content()
+
         browser.close()
-        return text
+
+        return body_text + "\n" + html_text
 
 def send_telegram(message: str):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
