@@ -257,7 +257,6 @@ def parse_price(text: str, min_price: int, max_price: int):
 
     return unique_prices[0]
 
-
 def get_page_text_with_playwright(url: str):
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -276,13 +275,13 @@ def get_page_text_with_playwright(url: str):
             )
         )
 
-        page.goto(url, wait_until="networkidle", timeout=60000)
-        page.wait_for_timeout(5000)
+        # No usamos networkidle porque Falabella/Ripley/Paris a veces nunca terminan de cargar.
+        page.goto(url, wait_until="domcontentloaded", timeout=90000)
+        page.wait_for_timeout(8000)
 
-        text = page.inner_text("body")
+        text = page.inner_text("body", timeout=30000)
         browser.close()
         return text
-
 
 def send_telegram(message: str):
     token = os.environ["TELEGRAM_BOT_TOKEN"]
