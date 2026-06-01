@@ -249,12 +249,12 @@ def parse_price(text: str, min_price: int, max_price: int):
                     continue
 
                 prices.append(price)
-
     if not prices:
         return None
 
     unique_prices = sorted(set(prices))
 
+    print("Precios candidatos:", [format_clp(p) for p in unique_prices])
     return unique_prices[0]
 
 def get_page_text_with_playwright(url: str):
